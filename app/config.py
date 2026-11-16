@@ -21,6 +21,13 @@ def _env_int(key: str, default: int) -> int:
         return default
 
 
+def _env_float(key: str, default: float) -> float:
+    try:
+        return float(_env(key, str(default)))
+    except ValueError:
+        return default
+
+
 @dataclass(frozen=True)
 class Settings:
     role: str = _env("DNS_ROLE", "primary")
@@ -37,6 +44,13 @@ class Settings:
     sync_interval: float = float(_env_int("SYNC_INTERVAL", 5))
     http_timeout: float = float(_env_int("HTTP_TIMEOUT", 10))
     max_records: int = _env_int("MAX_RECORDS", 8)
+    # Out-of-zone recursion: a single UDP upstream per machine. Empty means
+    # no forwarding (out-of-zone queries keep answering REFUSED).
+    dns_upstream: str = _env("DNS_UPSTREAM", "")
+    # Forwarding is deliberately small and bounded: at most N in flight,
+    # and one answer must arrive within FORWARD_TIMEOUT seconds.
+    forward_max_inflight: int = max(1, _env_int("FORWARD_MAX_INFLIGHT", 4))
+    forward_timeout: float = max(0.05, _env_float("FORWARD_TIMEOUT", 1.0))
 
     @property
     def is_primary(self) -> bool:

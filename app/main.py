@@ -37,6 +37,7 @@ def _zone_out() -> ZoneOut:
 def _version_out() -> VersionOut:
     serial, records, published_at = storage.get_active_version()
     sync_state = storage.get_sync_state()
+    forwarder = dns_service.forwarder
     return VersionOut(
         role=settings.role,
         zone=settings.dns_zone,
@@ -47,6 +48,18 @@ def _version_out() -> VersionOut:
         last_sync_status=sync_state["last_sync_status"],
         last_sync_error=sync_state["last_sync_error"] or None,
         upstream_serial=sync_state["upstream_serial"],
+        forward_enabled=bool(forwarder and forwarder.enabled),
+        forward_upstream=(
+            forwarder.upstream_display if forwarder else None
+        ),
+        forward_error=forwarder.error if forwarder else None,
+        forward_max_inflight=(
+            forwarder.max_inflight if forwarder
+            else settings.forward_max_inflight
+        ),
+        forward_timeout=(
+            forwarder.timeout if forwarder else settings.forward_timeout
+        ),
     )
 
 

@@ -1,13 +1,50 @@
 services:
+  # Example upstream recursion target. It answers a small fixed set of A
+  # records for names outside internal.local so the forwarding path can
+  # be exercised without relying on the host's resolver.
+  upstream:
+    build: .
+    image: intranet-dns:latest
+    command: ["python", "-m", "app.example_upstream"]
+    environment:
+      UPSTREAM_PORT: "53"
+    expose:
+      - "53/udp"
+    ports:
+      - "5055:53/udp"    # optional: query the example upstream directly
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          from dnslib import DNSRecord
+          import socket
+          q = DNSRecord.question("www.example.org", "A")
+          s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+          s.settimeout(2)
+          s.sendto(q.pack(), ("127.0.0.1", 53))
+          r = DNSRecord.parse(s.recvfrom(65535)[0])
+          raise SystemExit(0 if r.header.rcode == 0 and r.rr else 1)
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   primary:
     build: .
     image: intranet-dns:latest
+    depends_on:
+      upstream:
+        condition: service_healthy
     environment:
       DNS_ROLE: primary
       DNS_ZONE: internal.local
       DB_PATH: /data/primary.db
       DNS_PORT: "5053"
       API_PORT: "8000"
+      DNS_UPSTREAM: upstream:53
+      FORWARD_MAX_INFLIGHT: "4"
+      FORWARD_TIMEOUT: "1"
     ports:
       - "8080:8000"      # primary Swagger / REST
       - "5053:5053/udp"  # primary DNS
@@ -23,6 +60,8 @@ services:
     build: .
     image: intranet-dns:latest
     depends_on:
+      upstream:
+        condition: service_healthy
       primary:
         condition: service_healthy
     environment:
@@ -32,6 +71,9 @@ services:
       DNS_PORT: "5053"
       API_PORT: "8000"
       PRIMARY_API_URL: http://primary:8000
+      DNS_UPSTREAM: upstream:53
+      FORWARD_MAX_INFLIGHT: "4"
+      FORWARD_TIMEOUT: "1"
       SYNC_INTERVAL: "3"
       HTTP_TIMEOUT: "10"
     ports:

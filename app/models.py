@@ -92,6 +92,11 @@ class VersionOut(BaseModel):
     last_sync_status: str = "never"
     last_sync_error: Optional[str] = None
     upstream_serial: Optional[int] = None
+    forward_enabled: bool = False
+    forward_upstream: Optional[str] = None
+    forward_error: Optional[str] = None
+    forward_max_inflight: int = 4
+    forward_timeout: float = 1.0
 
 
 class PublishResult(BaseModel):
